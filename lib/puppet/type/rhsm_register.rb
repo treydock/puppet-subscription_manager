@@ -78,12 +78,16 @@ EOD
     desc "The license pool to attach to after registering the system"
   end
 
-  newparam(:environment) do
-    desc "The environment to subscribe to in the case of using katello."
+  newparam(:lifecycleenv) do
+    desc "The lifecyle environment to subscribe to in the case of using katello."
   end
 
   newparam(:servicelevel) do
     desc "A service level for automatic attachement with Satellite servers."
+  end
+
+  newparam(:release) do
+    desc "The release command sets a sticky OS version to use when installing or updating packages."
   end
 
   newparam(:org) do

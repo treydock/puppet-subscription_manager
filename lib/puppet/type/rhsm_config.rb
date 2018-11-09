@@ -35,6 +35,8 @@ Puppet::Type.newtype(:rhsm_config) do
      productcertdir         => '/etc/pki/product',
      repo_ca_cert           => '/etc/rhsm/ca/ca.pem,'
      report_package_profile => 1,
+     proxy_hostname         => 'proxy.example.com',
+     proxy_port             => '44443',
   }
 
 EOD
@@ -45,34 +47,42 @@ ensurable
 $default_filename = '/etc/rhsm/rhsm.conf'
 
 def self.text_options
-  {:server_proxy_hostname => 'server.proxy_hostname',
-  :server_proxy_user => 'server.proxy_user',
+  {
   :server_hostname => 'server.hostname',
-  :server_ssl_verify_depth => 'server.ssl_verify_depth',
-  :server_proxy_password => 'server.proxy_password',
-  :server_proxy_port => 'server.proxy_port',
   :server_prefix => 'server.prefix',
   :server_port => 'server.port',
-  :rhsm_entitlementcertdir => 'rhsm.entitlementcertdir',
-  :rhsm_pluginconfdir => 'rhsm.pluginconfdir',
+  :server_server_timeout => 'server.server_timeout',
+  :server_ssl_verify_depth => 'server.ssl_verify_depth',
+  :server_proxy_hostname => 'server.proxy_hostname',
+  :server_proxy_port => 'server.proxy_port',
+  :server_proxy_user => 'server.proxy_user',
+  :server_proxy_password => 'server.proxy_password',
+  :server_no_proxy => 'server.no_proxy',
   :rhsm_baseurl => 'rhsm.baseurl',
-  :rhsm_plugindir => 'rhsm.plugindir',
   :rhsm_ca_cert_dir => 'rhsm.ca_cert_dir',
-  :rhsm_productcertdir => 'rhsm.productcertdir',
-  :rhsm_consumercertdir => 'rhsm.consumercertdir',
   :rhsm_repo_ca_cert => 'rhsm.repo_ca_cert',
+  :rhsm_productcertdir => 'rhsm.productcertdir',
+  :rhsm_entitlementcertdir => 'rhsm.entitlementcertdir',
+  :rhsm_consumercertdir => 'rhsm.consumercertdir',
+  :rhsm_pluginconfdir => 'rhsm.pluginconfdir',
+  :rhsm_plugindir => 'rhsm.plugindir',
   :rhsmcertd_certcheckinterval => 'rhsmcertd.certcheckinterval',
-  :rhsmcertd_autoattachinterval => 'rhsmcertd.autoattachinterval'}
+  :rhsmcertd_autoattachinterval => 'rhsmcertd.autoattachinterval',
+  :logging_default_log_level => 'logging.default_log_level',
+  :logging_subscription_manager => 'logging.subscription_manager',
+  :logging_rhsm => 'logging.rhsm',
+  :logging_rhsm_app => 'logging.rhsm-app'
+  }
 end
-
 
 def self.binary_options
-  {:server_insecure => 'server.insecure',
+  {
+  :server_insecure => 'server.insecure',
   :rhsm_manage_repos => 'rhsm.manage_repos',
   :rhsm_full_refresh_on_yum => 'rhsm.full_refresh_on_yum',
-  :rhsm_report_package_profile => 'rhsm.report_package_profile' }
+  :rhsm_report_package_profile => 'rhsm.report_package_profile'
+  }
 end
-
 
   newparam(:name, :namevar => true) do
     desc "The configuration file"
@@ -129,6 +139,10 @@ end
       fail("Require a small positive number. Was given #{value}.") unless value.nil? or ( value.to_i and (value.to_i >= 0))
     end
   end
+  
+  newproperty(:server_no_proxy) do
+    desc "Proxy exception list"
+  end
 
   newproperty(:server_prefix) do
     desc "Path on the server for the Candlepin service."
@@ -139,6 +153,13 @@ end
 
   newproperty(:server_port) do
     desc "Port on the server for the RHSM service."
+    validate do |value|
+      fail("Require a small positive number. Was given #{value}.") unless value.to_i and (value.to_i >= 0)
+    end
+  end
+
+  newproperty(:server_server_timeout) do
+    desc "Server Timeout"
     validate do |value|
       fail("Require a small positive number. Was given #{value}.") unless value.to_i and (value.to_i >= 0)
     end
@@ -190,6 +211,36 @@ end
     desc "The Consumer certificate directory."
     validate do |value|
       fail("Require a valid aboslute UNIX path.  Was given #{value}.") unless value =~ /^\/[\/_\-0-9a-zA-Z.]*$/ or value =~ /.*\.\..*/
+    end
+  end
+
+  newproperty(:logging_default_log_level) do
+    desc "The default log level for all loggers."
+    validate do |value|
+      fail("Require a valid log level (DEBUG, INFO, WARNING, ERROR, or CRITICAL).  Was given #{value}.") unless value =~ /(DEBUG|INFO|WARNING|ERROR|CRITICAL)/
+    end
+  end
+
+
+  newproperty(:logging_subscription_manager) do
+    desc "The  log level for all subscription_manager modules. Not that sub-modules are not configurable by this."
+    validate do |value|
+      fail("Require a valid log level (DEBUG, INFO, WARNING, ERROR, or CRITICAL).  Was given #{value}.") unless value =~ /(DEBUG|INFO|WARNING|ERROR|CRITICAL)/
+    end
+  end
+
+
+  newproperty(:logging_rhsm) do
+    desc "The log level for rhsm itself."
+    validate do |value|
+      fail("Require a valid log level (DEBUG, INFO, WARNING, ERROR, or CRITICAL).  Was given #{value}.") unless value =~ /(DEBUG|INFO|WARNING|ERROR|CRITICAL)/
+    end
+  end
+
+  newproperty(:logging_rhsm_app) do
+    desc "The log level for the rhsm-app 'application.'"
+    validate do |value|
+      fail("Require a valid log level (DEBUG, INFO, WARNING, ERROR, or CRITICAL).  Was given #{value}.") unless value =~ /(DEBUG|INFO|WARNING|ERROR|CRITICAL)/
     end
   end
 

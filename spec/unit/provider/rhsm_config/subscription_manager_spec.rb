@@ -18,25 +18,29 @@ provider_class = Puppet::Type.type(:rhsm_config).provider(:subscrption_manager)
 describe  provider_class, 'rhsm_config provider' do
   title = '/etc/rhsm/rhsm.conf' # type.$default_filename
   properties = {
-  :name                        => title,
-  :provider                    => :subscription_manager,
-  :server_hostname             => 'katello.example.com',
-  :server_insecure             => false,
-  :server_port                 => 443,
-  :server_prefix               => '/rhsm',
-  :server_ssl_verify_depth     => 3,
-  :rhsm_baseurl                => 'https://katello.example.com/pulp/repos',
-  :rhsm_ca_cert_dir            => '/etc/rhsm/ca/',
-  :rhsm_consumercertdir        => '/etc/pki/consumer',
-  :rhsm_entitlementcertdir     => '/etc/pki/entitlement',
-  :rhsm_full_refresh_on_yum    => true,
-  :rhsm_manage_repos           => true,
-  :rhsm_pluginconfdir          => '/etc/rhsm/pluginconf.d',
-  :rhsm_plugindir              => '/usr/share/rhsm-plugins',
-  :rhsm_productcertdir         => '/etc/pki/product',
-  :rhsm_repo_ca_cert           => '/etc/rhsm/ca/',
-  :rhsm_report_package_profile => true,
+  :name                         => title,
+  :provider                     => :subscription_manager,
+  :server_hostname              => 'katello.example.com',
+  :server_insecure              => false,
+  :server_port                  => 443,
+  :server_prefix                => '/rhsm',
+  :server_ssl_verify_depth      => 3,
+  :rhsm_baseurl                 => 'https://katello.example.com/pulp/repos',
+  :rhsm_ca_cert_dir             => '/etc/rhsm/ca/',
+  :rhsm_consumercertdir         => '/etc/pki/consumer',
+  :rhsm_entitlementcertdir      => '/etc/pki/entitlement',
+  :rhsm_full_refresh_on_yum     => true,
+  :rhsm_manage_repos            => true,
+  :rhsm_pluginconfdir           => '/etc/rhsm/pluginconf.d',
+  :rhsm_plugindir               => '/usr/share/rhsm-plugins',
+  :rhsm_productcertdir          => '/etc/pki/product',
+  :rhsm_repo_ca_cert            => '/etc/rhsm/ca/',
+  :rhsm_report_package_profile  => true,
   :rhsmcertd_autoattachinterval => 1440,
+  :server_proxy_hostname        => 'proxy.example.com',
+  :server_proxy_user            => 'proxy_user',
+  :server_proxy_password        => 'proxy_password',
+  :server_proxy_port            => 4443,
  }
 
  config_file = '/etc/rhsm/rhsm.conf'
@@ -47,10 +51,10 @@ describe  provider_class, 'rhsm_config provider' do
     insecure = [0]
     port = [443]
     prefix = /rhsm
-    proxy_hostname = []
-    proxy_password = []
-    proxy_port = []
-    proxy_user = []
+    proxy_hostname = proxy.example.com
+    proxy_password = proxy_password
+    proxy_port = 4443
+    proxy_user = proxy_user
     ssl_verify_depth = [3]
 
  [rhsm]
@@ -189,8 +193,9 @@ EOD
       @res.provider.set(:ensure          => :present)
       @res.provider.set(:server_insecure => false)
       @res.provider.set(:server_port     => 443)
-      expect(@res.provider).to receive(:build_config_parameters) { ['foo'] }
+      expect(@res.provider).to receive(:build_config_parameters) { { :apply => ['foo'], :remove => nil } }
       expect(@res.provider).to receive(:subscription_manager).with('foo')
+      expect(@res.provider.class).to receive(:subscription_manager).with(["config","--list"]) {}
       allow(@res.provider).to receive(:exists?) { true }
       @res.provider.flush
     end
@@ -200,8 +205,10 @@ EOD
       @res.provider.set(:server_insecure => false)
       @res.provider.set(:server_port     => 443)
       expect(@res.provider.class).to receive(:subscription_manager).with(
-        "config", "--remove=server.port", "--remove=server.insecure"
-      )
+        'config', '--remove=server.insecure' )
+      expect(@res.provider.class).to receive(:subscription_manager).with(
+        'config', '--remove=server.port')
+      expect(@res.provider.class).to receive(:subscription_manager).with(["config","--list"]) {}
       allow(@res.provider).to receive(:exists?) { false }
       @res.provider.flush
     end
@@ -224,6 +231,8 @@ EOD
         config = provider.class.get_configuration
         expect(config.size).to_not eq(0)
         expect(config[:name]).to eq('/etc/rhsm/rhsm.conf')
+        expect(config[:server_hostname]).to eq('katello.example.com')
+        expect(config[:server_proxy_hostname]).to eq('proxy.example.com')
         expect(config[:provider]).to eq(:subscription_manager)
       end
       it 'accepts hostnames with numbers in them' do
@@ -251,14 +260,44 @@ EOD
          config = configs[0]
          expect(config.public_send(:rhsm_repo_ca_cert)).to eq(resource[:rhsm_repo_ca_cert])
      end
+     it "detects default options" do
+       @resource = Puppet::Type.type(:rhsm_config).new(
+         {:provider => provider, :name => title })
+       expect(@resource.provider.class).to receive(:subscription_manager).with(['config','--list']) { raw_hostname01_data }
+       config = @resource.provider.class.get_configuration
+       expect(config.size).to_not eq(0)
+       expect(@resource.provider.class.defaults_to?).to include(:server_port)
+     end
     end
 
     describe 'build_config_parameters' do
-      it 'returns nothing for missing parameters' do
-        @resource = Puppet::Type.type(:rhsm_config).new({ :provider => provider, :name => title })
-        expect(@resource.provider.build_config_parameters(:apply)).to be(nil)
+      it 'returns nothing when provider or title are the only parameters' do
+        @resource = Puppet::Type.type(:rhsm_config).new(
+          {:provider => provider, :name => title })
+        expect(@resource.provider.build_config_parameters(:apply)).to eq(
+         { :apply => nil, :remove => nil})
       end
-        properties.keys.each { |key|
+      it "skips empty options" do
+        @resource = Puppet::Type.type(:rhsm_config).new(
+          {:provider => provider, :name => title })
+        @resource.provider.set(:server_port      => '')
+        @resource[:server_port] = ''
+        expect(@resource.provider.build_config_parameters(:apply)).to eq(
+         { :apply => nil, :remove => nil})
+      end
+      it "removes set options using empty parameters" do
+        @resource = Puppet::Type.type(:rhsm_config).new(
+          {:provider => provider, :name => title })
+        @resource.provider.set(:server_insecure  => '')
+        @resource[:server_insecure] = 'false'
+        @resource.provider.set(:server_port      => '')
+        @resource[:server_port] = '8080'
+        @resource.provider.set(:rhsm_ca_cert_dir => '')
+        @resource[:rhsm_ca_cert_dir] = '/bin/foo'
+        expect((@resource.provider.build_config_parameters(:apply)[:remove]).sort!).to eq(
+        ["--remove=server.insecure", "--remove=server.port", "--remove=rhsm.ca_cert_dir"].sort!)
+      end
+      properties.keys.each { |key|
           if key == :provider or key == :name
             # provider is irrelevant to the operating system command
             # name is always passed in as name of the type
@@ -271,33 +310,60 @@ EOD
           if @resource.class.binary_options.include?(key)
             opt = @resource.class.binary_options[key]
             value = (properties[key] == true ) ? 1 : 0
-            expect(@resource.provider.build_config_parameters(:apply)).to eq([
-              'config', ["--#{opt}", "#{value}"]
-              ])
-            expect(@resource.provider.build_config_parameters(:remove)).to eq([
-                'config', "--remove=#{opt}" ])
+            expect(@resource.provider.build_config_parameters(:apply)[:apply]).to eq([
+              'config', "--#{opt}", "#{value}" ])
+            expect(@resource.provider.build_config_parameters(:remove)[:remove]).to eq([
+                "--remove=#{opt}" ])
           else
             opt = @resource.class.text_options[key]
-            expect(@resource.provider.build_config_parameters(:apply)).to eq([
-              'config', "--#{opt}", properties[key]
+            expect(@resource.provider.build_config_parameters(:apply)[:apply]).to eq([
+              'config', "--#{opt}", properties[key].to_s
               ])
-            expect(@resource.provider.build_config_parameters(:remove)).to eq([
-              'config', "--remove=#{opt}" ])
+            expect(@resource.provider.build_config_parameters(:remove)[:remove]).to eq(
+              [ "--remove=#{opt}" ])
           end
         end
-        }
-        it "correctly combines several options into a command" do
-          @resource = Puppet::Type.type(:rhsm_config).new(
-            {:provider => provider, :name => title })
-          @resource.provider.set(:server_insecure  => false)
-          @resource.provider.set(:server_port      => 443)
-          @resource.provider.set(:rhsm_ca_cert_dir => '/etc/rhsm/ca/')
-          expect(@resource.provider.build_config_parameters(:apply)).to eq([
-            'config',
-            "--server.port", 443, "--rhsm.ca_cert_dir", "/etc/rhsm/ca/", ["--server.insecure", "0"]
-            ])
-          expect(@resource.provider.build_config_parameters(:remove)).to eq([
-              'config',  "--remove=server.port", "--remove=rhsm.ca_cert_dir", "--remove=server.insecure" ])
-        end
+      }
+      it "correctly splits mixes of remove and create options into two commands" do
+        @resource = Puppet::Type.type(:rhsm_config).new(
+          {:provider => provider, :name => title, :server_port => 999,
+            :rhsm_ca_cert_dir => '/foo'})
+        @resource.provider.set(:server_insecure  => false)
+        @resource.provider.set(:server_port      => nil)
+        @resource.provider.set(:rhsm_ca_cert_dir => "/etc/rhsm/ca/")
+        combo = @resource.provider.build_config_parameters(:apply)
+        apply_expected = [ "config", "--rhsm.ca_cert_dir", "/etc/rhsm/ca/",
+          "--server.insecure", "0"].sort!
+        remove_expected = [ "--remove=server.port"].sort!
+        expect((combo[:apply]).sort!).to eq(apply_expected)
+        expect((combo[:remove]).sort!).to eq(remove_expected)
+      end
+      it "correctly combines several options into a command" do
+        @resource = Puppet::Type.type(:rhsm_config).new(
+          {:provider => provider, :name => title })
+        @resource.provider.set(:server_insecure  => false)
+        @resource.provider.set(:server_port      => 443)
+        @resource.provider.set(:rhsm_ca_cert_dir => '/etc/rhsm/ca/')
+        apply = @resource.provider.build_config_parameters(:apply)
+        expect(apply[:apply].sort!).to eq([
+          'config',
+          "--server.port", "443", "--rhsm.ca_cert_dir", "/etc/rhsm/ca/", "--server.insecure", "0"
+        ].sort!)
+        expect(apply[:remove]).to eq(nil)
+        remove = @resource.provider.build_config_parameters(:remove)
+        expect(remove[:apply]).to eq(nil)
+        expect(remove[:remove].sort!).to eq([
+            "--remove=server.port", "--remove=rhsm.ca_cert_dir", "--remove=server.insecure" ].sort!)
+      end
+      it "skips default options" do
+        @resource = Puppet::Type.type(:rhsm_config).new(
+          {:provider => provider, :name => title })
+        @resource.provider.set(:server_insecure  => false)
+        @resource.provider.set(:server_port      => 443)
+        @resource.provider.set(:rhsm_ca_cert_dir => '/etc/rhsm/ca/')
+        @resource.provider.class.defaults_to = [ :server_port ]
+        apply = @resource.provider.build_config_parameters(:apply)
+        expect(apply).to_not include(:server_port)
+      end
     end
 end

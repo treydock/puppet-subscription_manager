@@ -27,8 +27,8 @@ describe described_class, 'type' do
     expect(described_class.attrtype(:ensure)).to eq(:property)
   end
 
-  [ :username, :password, :org, :activationkey, :environment,
-    :pool, :servicelevel ].each { |params|
+  [ :username, :password, :org, :activationkey, :lifecycleenv,
+    :pool, :servicelevel, :release ].each { |params|
       context "for #{params}" do
         it "should be of type paramter" do
           expect(described_class.attrtype(params)).to eq(:param)
