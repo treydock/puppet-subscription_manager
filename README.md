@@ -13,6 +13,7 @@ or RedHat Satellite 6.
 > You cannot use this module to switch between SAM and other products or
 > to SAM from a different product because of the changes in the internal name
 > for the CA certificates.
+>
 
 This module is a fork of the [puppet-subscription_manager](https://github.com/jlaska/puppet-subscription_manager)
 module by James Laska that was in turn derived from [puppet-rhnreg_ks module](https://github.com/strider/puppet-rhnreg_ks)
@@ -20,6 +21,11 @@ module by James Laska that was in turn derived from [puppet-rhnreg_ks module](ht
  resource and separates repository management from control of the Yum overrides.
 
 ## Notice
+
+This module is not for direct use with RedHat Network.  For that, either use the
+provided resource types directly or see the Ansible playbooks available directly
+from RedHat.  If you really want to talk to RHN directly, see the
+`subscription_manager::ca_package` parameter for how.
 
 Due to various terminology differences between RHN Satellite, the upstream
 Katello project and the further upstream component projects of Candlepin, The
@@ -30,7 +36,7 @@ confusing.
 * Satellite, unlike Katello, will require attachment to subscriptions
   whenever paid-for RedHat Network Channels are made available through a
   repository view.   This module does not manage those certificates.
-* RedHat SAM is an installable RedHat supported version of the Candlepin service
+* RedHat SAM is an install-able RedHat supported version of the Candlepin service
   which uses "candlepin-cert-consumer-" package name instead of of the package
   name "katello-ca-consumer-".  Options are provided to select this.
 
@@ -124,6 +130,9 @@ class { 'subscription_manager':
 Register a RedHat Enterprise 7 or CentOS 7 node to the RedHat Network with
 Satellite 6 using a password and username.
 
+Note that you have to stop managing the ca_package as you get that from RedHat
+as part of the OS installation.
+
 ```puppet
 class { 'subscription_manager':
    org           => 'My_Company_Org_in_RHN',
@@ -131,6 +140,7 @@ class { 'subscription_manager':
    password      => 'password123',
    autosubscribe => true,
    servicelevel  => 'STANDARD',
+   ca_package    => false,
 }
 
 Putting the explicit password in the code is a *bad* idea. Using hiera-gpg or
@@ -396,7 +406,7 @@ While this type is mostly useful for exporting the registration information in d
 it can also be used to force switch registrations for selected clients.
 
 ### rhsm\_pool Parameters
-- **name**: Unique Textual description of the Pool
+- **subscription\_name**: Unique Textual description of the Pool
 - **ensure**: Is this pool absent or present?
 - **provides**: Textual information about the Pool, usually same as the name.
 - **sku**: Stock Keeping Unit, usually for inventory tracking
@@ -419,7 +429,7 @@ is it possible for a single server to consume several subscriptions.
 
 ```puppet
 rhsm_pool { '1a2b3c4d5e6f1234567890abcdef12345':
-  name              => 'Extra Packages for Enterprise Linux',
+  subscription_name => 'Extra Packages for Enterprise Linux',
   ensure            => present,
   provides          => 'EPEL',
   sku               => 1234536789012,
@@ -438,6 +448,13 @@ rhsm_pool { '1a2b3c4d5e6f1234567890abcdef12345':
   system_type       => physical,
 }
 ```
+Note of caution:
+* A "name" parameter may get created by Puppet's resource abstraction API for
+Pools.
+* The "name" parameter is an alias for the ID value. So this must match the field
+`id` in value.
+* The name of a Pool should always match the `id`.  That is used for managing
+the pool.  The human-friendly "name" is ignored.
 
 ## Installing
 
