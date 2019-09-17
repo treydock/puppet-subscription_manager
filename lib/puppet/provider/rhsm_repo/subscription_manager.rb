@@ -37,6 +37,8 @@ Puppet::Type.type(:rhsm_repo).provide(:subscription_manager) do
       []
     else
       repos.map do |repo|
+        next if repo.empty?
+        next unless repo[:name]
         new(repo)
       end
     end
